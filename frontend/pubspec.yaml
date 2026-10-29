@@ -1,0 +1,27 @@
+name: ngo_khac_trung_0354121528
+description: An Tâm Số - đồng hành cùng gia đình xây dựng thói quen số lành mạnh.
+publish_to: none
+version: 1.0.0+1
+environment:
+  sdk: ^3.8.0
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.4.0
+  flutter_secure_storage: ^9.2.4
+  local_auth: ^2.3.0
+  nfc_manager: ^3.5.0
+  crypto: ^3.0.6
+  geolocator: ^14.0.2
+  url_launcher: ^6.3.3
+  flutter_web_auth_2: 4.1.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+flutter:
+  uses-material-design: true
+
+dependency_overrides:
+  nfc_manager:
+    path: third_party/nfc_manager
