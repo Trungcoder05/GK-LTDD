@@ -1,7 +1,148 @@
 part of 'main.dart';
 
+class SessionGate extends StatefulWidget {
+  const SessionGate({super.key});
+
+  @override
+  State<SessionGate> createState() => _SessionGateState();
+}
+
+class _SessionGateState extends State<SessionGate> {
+  Map<String, dynamic>? user;
+  bool loading = true;
+  String? error;
+  bool sessionExpired = false;
+
+  @override
+  void initState() {
+    super.initState();
+    restoreSession();
+  }
+
+  Future<void> restoreSession() async {
+    if (mounted) {
+      setState(() {
+        loading = true;
+        error = null;
+      });
+    }
+    try {
+      final backgroundedAt = await Api.storage.read(
+        key: _backgroundedAtKey,
+      );
+      await Api.storage.delete(key: _backgroundedAtKey);
+      final token = await Api.storage.read(key: 'session_token');
+      if (token == null) {
+        if (mounted) setState(() => loading = false);
+        return;
+      }
+
+      final backgroundedAtMillis = int.tryParse(backgroundedAt ?? '');
+      if (backgroundedAtMillis != null &&
+          DateTime.now()
+                  .difference(
+                    DateTime.fromMillisecondsSinceEpoch(backgroundedAtMillis),
+                  ) >=
+              sessionTimeout) {
+        await api.logout();
+        if (mounted) {
+          setState(() {
+            sessionExpired = true;
+            loading = false;
+          });
+        }
+        return;
+      }
+
+      api.token = token;
+      final restoredUser = Map<String, dynamic>.from(
+        await api.call('GET', '/me'),
+      );
+      final email = restoredUser['email']?.toString();
+      if (email != null && email.isNotEmpty) {
+        await Api.storage.write(key: 'remembered_account', value: email);
+      }
+      final savedUserId = await Api.storage.read(key: 'session_user_id');
+      if (savedUserId != null && savedUserId != restoredUser['id']) {
+        await api.logout();
+        if (mounted) setState(() => loading = false);
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          user = restoredUser;
+          loading = false;
+        });
+      }
+    } on ApiException catch (e) {
+      api.token = null;
+      if (e.statusCode == 401) {
+        await Api.storage.delete(key: 'session_token');
+        await Api.storage.delete(key: 'session_user_id');
+        if (mounted) setState(() => loading = false);
+      } else if (mounted) {
+        setState(() {
+          error = e.message;
+          loading = false;
+        });
+      }
+    } catch (e) {
+      api.token = null;
+      if (mounted) {
+        setState(() {
+          error = e.toString();
+          loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> goToLogin() async {
+    await api.logout();
+    if (mounted) setState(() => user = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (user case final restoredUser?) {
+      return Home(user: restoredUser);
+    }
+    if (error != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Không thể khôi phục phiên: $error'),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: restoreSession,
+                  child: const Text('Thử lại'),
+                ),
+                TextButton(
+                  onPressed: goToLogin,
+                  child: const Text('Đăng nhập lại'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    return Login(sessionExpired: sessionExpired);
+  }
+}
+
 class Login extends StatefulWidget {
-  const Login({super.key});
+  final bool sessionExpired;
+
+  const Login({super.key, this.sessionExpired = false});
+
   @override
   State<Login> createState() => _LoginState();
 }
@@ -12,8 +153,29 @@ class _LoginState extends State<Login> {
       email = TextEditingController(),
       name = TextEditingController(),
       code = TextEditingController();
-  bool register = false, busy = false;
+  bool register = false, busy = false, hasBiometricSession = false;
   String? challenge;
+
+  @override
+  void initState() {
+    super.initState();
+    loadRememberedAccount();
+  }
+
+  Future<void> loadRememberedAccount() async {
+    final values = await Future.wait([
+      Api.storage.read(key: 'remembered_account'),
+      Api.storage.read(key: 'biometric_token'),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      if (username.text.isEmpty && values[0] != null) {
+        username.text = values[0]!;
+      }
+      hasBiometricSession = values[1] != null;
+    });
+  }
+
   @override
   void dispose() {
     for (final c in [username, password, email, name, code]) {
@@ -33,14 +195,40 @@ class _LoginState extends State<Login> {
     }
   }
 
-  Future<void> enter(Map<String, dynamic> result) async {
-    api.token = result['token'];
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => Home(user: Map<String, dynamic>.from(result['user'])),
-      ),
+  Future<void> enter(
+    Map<String, dynamic> result, {
+    String? rememberedAccount,
+  }) async {
+    final user = Map<String, dynamic>.from(result['user']);
+    final biometricToken = await Api.storage.read(key: 'biometric_token');
+    if (biometricToken != null) {
+      final biometricUserId = await Api.storage.read(key: 'biometric_user_id');
+      if (biometricUserId != user['id']) {
+        await Api.clearBiometricSession();
+      }
+    }
+    final token = result['token']?.toString();
+    if (token == null || token.isEmpty) {
+      throw Exception('Máy chủ không trả về phiên đăng nhập hợp lệ.');
+    }
+    await Api.storage.write(key: 'session_token', value: token);
+    await Api.storage.write(
+      key: 'session_user_id',
+      value: user['id'].toString(),
     );
+    final account =
+        rememberedAccount?.trim().isNotEmpty == true
+        ? rememberedAccount!.trim()
+        : user['email']?.toString();
+    if (account != null && account.isNotEmpty) {
+      await Api.storage.write(key: 'remembered_account', value: account);
+    }
+    await Api.storage.delete(key: _backgroundedAtKey);
+    api.token = token;
+    if (!mounted) return;
+    Navigator.of(
+      context,
+    ).pushReplacement(MaterialPageRoute(builder: (_) => Home(user: user)));
   }
 
   Future<void> submit() => work(() async {
@@ -52,6 +240,7 @@ class _LoginState extends State<Login> {
             'code': code.text.trim(),
           }),
         ),
+        rememberedAccount: register ? email.text : username.text,
       );
       return;
     }
@@ -71,21 +260,46 @@ class _LoginState extends State<Login> {
   });
   Future<void> biometric() => work(() async {
     final auth = FingerprintAuth();
-    if (!await auth.available()) {
-      throw Exception('Thiết bị cần sinh trắc học đã đăng ký.');
-    }
     if (!mounted) return;
-    if (!await auth.authenticate(context)) return;
+    final savedMethod = await Api.storage.read(key: 'biometric_method');
+    final savedBiometricType = switch (savedMethod) {
+      'face' => BiometricType.face,
+      'fingerprint' => BiometricType.fingerprint,
+      'strong' => BiometricType.strong,
+      'weak' => BiometricType.weak,
+      _ => null,
+    };
+    final availableMethods = await auth.availableMethods();
+    if (!mounted) return;
+    final method =
+        savedBiometricType != null &&
+            availableMethods.contains(savedBiometricType)
+        ? savedBiometricType
+        : await auth.chooseMethod(context);
+    if (!mounted) return;
+    if (!await auth.authenticate(context, method)) return;
     final token = await Api.storage.read(key: 'biometric_token');
     if (token == null) {
       throw Exception(
-        'Hãy đăng nhập bằng OTP và bật vân tay trong tài khoản trước.',
+        'Hãy đăng nhập bằng OTP và bật sinh trắc học trong cài đặt tài khoản trước.',
       );
     }
+    await Api.storage.write(
+      key: 'biometric_method',
+      value: auth.methodKey(method),
+    );
     api.token = token;
     try {
-      final u = await api.call('GET', '/me');
-      await enter({'token': token, 'user': u});
+      final user = Map<String, dynamic>.from(await api.call('GET', '/me'));
+      final biometricUserId = await Api.storage.read(key: 'biometric_user_id');
+      if (biometricUserId != null && biometricUserId != user['id']) {
+        await Api.clearBiometricSession();
+        throw Exception('Phiên sinh trắc học không khớp tài khoản.');
+      }
+      if (biometricUserId == null) {
+        await Api.storage.write(key: 'biometric_user_id', value: user['id']);
+      }
+      await enter({'token': token, 'user': user});
     } catch (e) {
       await api.logout();
       rethrow;
@@ -121,11 +335,17 @@ class _LoginState extends State<Login> {
       notify(context, response['message']);
       return;
     }
-    await enter(response);
+    final user = response['user'];
+    await enter(
+      response,
+      rememberedAccount: user is Map<String, dynamic>
+          ? user['email']?.toString()
+          : null,
+    );
   });
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: paper,
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
     body: SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
@@ -237,11 +457,11 @@ class _LoginState extends State<Login> {
                               : register
                               ? 'Tạo tài khoản gia đình'
                               : 'Chào mừng bạn trở lại',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 22,
                             letterSpacing: -0.3,
                             fontWeight: FontWeight.w800,
-                            color: ink,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -251,11 +471,19 @@ class _LoginState extends State<Login> {
                               : register
                               ? 'Đăng ký bằng email để lưu hồ sơ gia đình.'
                               : 'Đăng nhập để tiếp tục chăm sóc nếp sống số.',
-                          style: const TextStyle(
-                            color: Color(0xFF718078),
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurfaceVariant,
                             height: 1.45,
                           ),
                         ),
+                        if (widget.sessionExpired) ...[
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Phiên đã khóa vì bạn rời ứng dụng quá 30 giây. Đăng nhập lại bằng email/OTP hoặc sinh trắc học.',
+                          ),
+                        ],
                         const SizedBox(height: 22),
                         if (!api.configured)
                           Container(
@@ -344,11 +572,14 @@ class _LoginState extends State<Login> {
                             icon: const Icon(Icons.g_mobiledata_rounded),
                             label: const Text('Tiếp tục với Google'),
                           ),
-                          TextButton.icon(
-                            onPressed: busy ? null : biometric,
-                            icon: const Icon(Icons.fingerprint_rounded),
-                            label: const Text('Mở phiên bằng sinh trắc học'),
-                          ),
+                          if (hasBiometricSession)
+                            TextButton.icon(
+                              onPressed: busy ? null : biometric,
+                              icon: const Icon(Icons.face_retouching_natural),
+                              label: const Text(
+                                'Mở phiên bằng khuôn mặt / vân tay',
+                              ),
+                            ),
                         ],
                         Align(
                           child: TextButton(

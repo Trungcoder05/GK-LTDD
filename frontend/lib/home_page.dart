@@ -1,5 +1,154 @@
 part of 'main.dart';
 
+class _ProfileEditDialog extends StatefulWidget {
+  final String initialName;
+
+  const _ProfileEditDialog({required this.initialName});
+
+  @override
+  State<_ProfileEditDialog> createState() => _ProfileEditDialogState();
+}
+
+class _ProfileEditDialogState extends State<_ProfileEditDialog> {
+  final _controller = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.text = widget.initialName;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Cập nhật hồ sơ'),
+    content: Form(
+      key: _formKey,
+      child: TextFormField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 80,
+        decoration: const InputDecoration(labelText: 'Tên hiển thị'),
+        validator: (value) {
+          final name = value?.trim() ?? '';
+          if (name.length < 2) return 'Nhập ít nhất 2 ký tự';
+          if (name.length > 80) return 'Tên tối đa 80 ký tự';
+          return null;
+        },
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Hủy'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (_formKey.currentState!.validate()) {
+            Navigator.pop(context, _controller.text.trim());
+          }
+        },
+        child: const Text('Lưu'),
+      ),
+    ],
+  );
+}
+
+class _PasswordEditDialog extends StatefulWidget {
+  final bool hasPassword;
+
+  const _PasswordEditDialog({required this.hasPassword});
+
+  @override
+  State<_PasswordEditDialog> createState() => _PasswordEditDialogState();
+}
+
+class _PasswordEditDialogState extends State<_PasswordEditDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _currentPassword = TextEditingController();
+  final _newPassword = TextEditingController();
+  final _confirmation = TextEditingController();
+
+  @override
+  void dispose() {
+    _currentPassword.dispose();
+    _newPassword.dispose();
+    _confirmation.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.hasPassword ? 'Đổi mật khẩu' : 'Đặt mật khẩu'),
+    content: Form(
+      key: _formKey,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.hasPassword)
+              TextFormField(
+                controller: _currentPassword,
+                obscureText: true,
+                autofillHints: const [AutofillHints.password],
+                decoration: const InputDecoration(
+                  labelText: 'Mật khẩu hiện tại',
+                ),
+                validator: (value) => value == null || value.isEmpty
+                    ? 'Nhập mật khẩu hiện tại'
+                    : null,
+              ),
+            TextFormField(
+              controller: _newPassword,
+              obscureText: true,
+              autofillHints: const [AutofillHints.newPassword],
+              decoration: const InputDecoration(
+                labelText: 'Mật khẩu mới (ít nhất 10 ký tự)',
+              ),
+              validator: (value) =>
+                  value == null || value.length < 10 || value.length > 72
+                  ? 'Mật khẩu cần từ 10 đến 72 ký tự'
+                  : null,
+            ),
+            TextFormField(
+              controller: _confirmation,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Nhập lại mật khẩu mới',
+              ),
+              validator: (value) => value != _newPassword.text
+                  ? 'Mật khẩu nhập lại chưa khớp'
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Hủy'),
+      ),
+      FilledButton(
+        onPressed: () {
+          if (!_formKey.currentState!.validate()) return;
+          Navigator.pop(context, {
+            if (widget.hasPassword) 'currentPassword': _currentPassword.text,
+            'newPassword': _newPassword.text,
+          });
+        },
+        child: Text(widget.hasPassword ? 'Cập nhật' : 'Tạo mật khẩu'),
+      ),
+    ],
+  );
+}
+
 class Home extends StatefulWidget {
   final Map<String, dynamic> user;
   const Home({super.key, required this.user});
@@ -166,19 +315,104 @@ class _HomeState extends State<Home> {
     ).pushReplacement(MaterialPageRoute(builder: (_) => const Login()));
   }
 
+  Future<void> editProfile() async {
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => _ProfileEditDialog(
+        initialName: widget.user['name']?.toString() ?? '',
+      ),
+    );
+    if (name == null || !mounted) return;
+    try {
+      final updated = Map<String, dynamic>.from(
+        await api.call('PATCH', '/me', {'name': name}),
+      );
+      if (!mounted) return;
+      setState(() => widget.user.addAll(updated));
+      notify(context, 'Đã cập nhật hồ sơ');
+    } catch (e) {
+      if (mounted) notify(context, e);
+    }
+  }
+
+  Future<void> updateFontScale(double scale) async {
+    try {
+      await saveFontScale(scale);
+    } catch (e) {
+      if (mounted) notify(context, e);
+    }
+  }
+
+  Future<void> updateBackground(Color color) async {
+    try {
+      await saveBackground(color);
+    } catch (e) {
+      if (mounted) notify(context, e);
+    }
+  }
+
+  Future<void> updateDarkMode(bool enabled) async {
+    try {
+      await saveDarkMode(enabled);
+    } catch (e) {
+      if (mounted) notify(context, e);
+    }
+  }
+
+  Future<void> chooseBackground() async {
+    final selected = await showDialog<Color>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Chọn màu nền'),
+        children: [
+          for (final entry in backgroundOptions.entries)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, entry.value),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 13,
+                    backgroundColor: entry.value,
+                    child: appBackground.value == entry.value
+                        ? const Icon(Icons.check_rounded, size: 16, color: ink)
+                        : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(entry.key)),
+                  if (appBackground.value == entry.value)
+                    const Icon(Icons.check_rounded, color: green, size: 18),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (selected != null) await updateBackground(selected);
+  }
+
   Future<void> enableFinger() async {
     try {
       final auth = FingerprintAuth();
-      if (!await auth.available()) {
-        throw Exception('Hãy đăng ký sinh trắc học trong cài đặt Android.');
-      }
       if (!mounted) return;
-      if (await auth.authenticate(context)) {
+      final method = await auth.chooseMethod(context);
+      if (mounted && await auth.authenticate(context, method)) {
+        await Api.storage.write(
+          key: 'biometric_method',
+          value: auth.methodKey(method),
+        );
+        await Api.storage.write(
+          key: 'biometric_user_id',
+          value: widget.user['id'].toString(),
+        );
         await Api.storage.write(key: 'biometric_token', value: api.token);
         if (mounted) {
           notify(
             context,
-            'Đã bật sinh trắc học. Phiên hết hạn sau 12 giờ; sau đó cần OTP.',
+            'Đã bật mở phiên bằng ${method == BiometricType.face
+                ? 'khuôn mặt'
+                : method == BiometricType.fingerprint
+                ? 'vân tay'
+                : 'sinh trắc học của thiết bị'}. Phiên hết hạn sau 12 giờ; sau đó cần OTP.',
           );
         }
       }
@@ -189,79 +423,10 @@ class _HomeState extends State<Home> {
 
   Future<void> changePassword() async {
     final hasPassword = widget.user['hasPassword'] == true;
-    final formKey = GlobalKey<FormState>();
-    final currentPassword = TextEditingController();
-    final newPassword = TextEditingController();
-    final confirmation = TextEditingController();
     final result = await showDialog<Map<String, String>>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(hasPassword ? 'Đổi mật khẩu' : 'Đặt mật khẩu'),
-        content: Form(
-          key: formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (hasPassword)
-                  TextFormField(
-                    controller: currentPassword,
-                    obscureText: true,
-                    autofillHints: const [AutofillHints.password],
-                    decoration: const InputDecoration(
-                      labelText: 'Mật khẩu hiện tại',
-                    ),
-                    validator: (value) => value == null || value.isEmpty
-                        ? 'Nhập mật khẩu hiện tại'
-                        : null,
-                  ),
-                TextFormField(
-                  controller: newPassword,
-                  obscureText: true,
-                  autofillHints: const [AutofillHints.newPassword],
-                  decoration: const InputDecoration(
-                    labelText: 'Mật khẩu mới (ít nhất 10 ký tự)',
-                  ),
-                  validator: (value) =>
-                      value == null || value.length < 10 || value.length > 72
-                      ? 'Mật khẩu cần từ 10 đến 72 ký tự'
-                      : null,
-                ),
-                TextFormField(
-                  controller: confirmation,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Nhập lại mật khẩu mới',
-                  ),
-                  validator: (value) => value != newPassword.text
-                      ? 'Mật khẩu nhập lại chưa khớp'
-                      : null,
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Hủy'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (!formKey.currentState!.validate()) return;
-              Navigator.pop(dialogContext, {
-                if (hasPassword) 'currentPassword': currentPassword.text,
-                'newPassword': newPassword.text,
-              });
-            },
-            child: Text(hasPassword ? 'Cập nhật' : 'Tạo mật khẩu'),
-          ),
-        ],
-      ),
+      builder: (_) => _PasswordEditDialog(hasPassword: hasPassword),
     );
-    currentPassword.dispose();
-    newPassword.dispose();
-    confirmation.dispose();
     if (result == null || !mounted) return;
     await execute(() async {
       await api.call('PATCH', '/me/password', result);
@@ -324,8 +489,8 @@ class _HomeState extends State<Home> {
           label: 'Tổng quan',
         ),
         NavigationDestination(
-          icon: Icon(Icons.manage_accounts_outlined),
-          label: 'Tài khoản',
+          icon: Icon(Icons.settings_outlined),
+          label: 'Cài đặt',
         ),
       ],
     ),
@@ -386,14 +551,109 @@ class _HomeState extends State<Home> {
               ),
               const SizedBox(height: 22),
               const Text(
-                'Tài khoản & bảo mật',
-                style: TextStyle(
-                  color: ink,
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                ),
+                'Cài đặt giao diện',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 10),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        secondary: Icon(
+                          appDarkMode.value
+                              ? Icons.dark_mode_rounded
+                              : Icons.light_mode_rounded,
+                          color: green,
+                        ),
+                        title: const Text('Giao diện tối'),
+                        subtitle: Text(
+                          appDarkMode.value
+                              ? 'Đang bật chế độ tối'
+                              : 'Đang dùng chế độ sáng',
+                        ),
+                        value: appDarkMode.value,
+                        onChanged: updateDarkMode,
+                      ),
+                      const Divider(height: 20),
+                      const Text(
+                        'Cỡ chữ',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      Row(
+                        children: [
+                          const Text('A', style: TextStyle(fontSize: 12)),
+                          Expanded(
+                            child: Slider(
+                              min: minFontScale,
+                              max: maxFontScale,
+                              divisions: 12,
+                              value: appFontScale.value,
+                              label: '${(appFontScale.value * 100).round()}%',
+                              onChanged: (value) {
+                                appFontScale.value = value;
+                              },
+                              onChangeEnd: updateFontScale,
+                            ),
+                          ),
+                          const Text(
+                            'A',
+                            style: TextStyle(
+                              fontSize: 21,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Màu nền',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        subtitle: Text(
+                          backgroundOptions.entries
+                              .firstWhere(
+                                (entry) => entry.value == appBackground.value,
+                              )
+                              .key,
+                        ),
+                        leading: CircleAvatar(
+                          radius: 14,
+                          backgroundColor: appBackground.value,
+                          child: const Icon(
+                            Icons.palette_outlined,
+                            size: 16,
+                            color: ink,
+                          ),
+                        ),
+                        trailing: const Icon(Icons.expand_more_rounded),
+                        onTap: chooseBackground,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Text(
+                'Tài khoản & bảo mật',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 10),
+              Card(
+                child: ListTile(
+                  leading: const CircleAvatar(
+                    backgroundColor: Color(0xFFE7EFE3),
+                    child: Icon(Icons.edit_outlined, color: green),
+                  ),
+                  title: const Text('Cập nhật hồ sơ'),
+                  subtitle: const Text('Thay đổi tên hiển thị của bạn'),
+                  onTap: editProfile,
+                ),
+              ),
               Card(
                 child: ListTile(
                   leading: const CircleAvatar(
@@ -437,7 +697,7 @@ class _HomeState extends State<Home> {
                     backgroundColor: Color(0xFFE7EFE3),
                     child: Icon(Icons.fingerprint_rounded, color: green),
                   ),
-                  title: const Text('Bật mở phiên bằng sinh trắc học'),
+                  title: const Text('Bật mở phiên bằng khuôn mặt / vân tay'),
                   subtitle: const Text(
                     'Cần đăng nhập OTP trước; dữ liệu sinh trắc không gửi lên server',
                   ),
@@ -452,8 +712,14 @@ class _HomeState extends State<Home> {
                   ),
                   title: const Text('Tắt mở phiên bằng sinh trắc học'),
                   onTap: () async {
-                    await Api.storage.delete(key: 'biometric_token');
-                    if (context.mounted) notify(context, 'Đã tắt vân tay');
+                    try {
+                      await Api.clearBiometricSession();
+                      if (context.mounted) {
+                        notify(context, 'Đã tắt mở phiên bằng sinh trắc học');
+                      }
+                    } catch (e) {
+                      if (context.mounted) notify(context, e);
+                    }
                   },
                 ),
               ),
@@ -504,7 +770,6 @@ class _HomeState extends State<Home> {
                               fontSize: 24,
                               letterSpacing: -0.6,
                               fontWeight: FontWeight.w800,
-                              color: ink,
                             ),
                           ),
                           const SizedBox(height: 5),
@@ -594,11 +859,7 @@ class _HomeState extends State<Home> {
                 if (role == 'admin' || role == 'staff') ...[
                   const Text(
                     'Số liệu tổng quan',
-                    style: TextStyle(
-                      color: ink,
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
-                    ),
+                    style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 10),
                   Wrap(
@@ -666,7 +927,6 @@ class _HomeState extends State<Home> {
                     const Text(
                       'Tài khoản người dùng',
                       style: TextStyle(
-                        color: ink,
                         fontSize: 19,
                         fontWeight: FontWeight.w800,
                       ),
@@ -701,7 +961,6 @@ class _HomeState extends State<Home> {
                               ? 'Hồ sơ được liên kết'
                               : 'Hồ sơ gia đình',
                           style: const TextStyle(
-                            color: ink,
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                           ),
