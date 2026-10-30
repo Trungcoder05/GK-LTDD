@@ -18,6 +18,16 @@ async function register(username='parent1'){
  return {...s.body,challenge:r.body.challengeId,code};
 }
 const agent=token=>({Authorization:'Bearer '+token});
+test('Swagger UI and OpenAPI specification are publicly available',async()=>{
+ const spec=await request(app).get('/openapi.json').expect(200);
+ assert.equal(spec.body.openapi,'3.0.3');
+ assert.ok(spec.body.paths['/children/{id}'].delete);
+ assert.deepEqual(spec.body.paths['/me'].get.security,[{bearerAuth:[]}]);
+ const docs=await request(app).get('/docs/').expect(200);
+ assert.match(docs.headers['content-type'],/text\/html/);
+ assert.match(docs.headers['content-security-policy'],/script-src 'self' 'unsafe-inline'/);
+ assert.match(docs.text,/Swagger UI/);
+});
 test('registration verifies OTP, stores only digest and rejects replay',async()=>{
  const u=await register();assert.equal(u.user.role,'parent');assert.ok(u.token);assert.equal(u.user.password,undefined);
  assert.equal(u.user.hasPassword,true);

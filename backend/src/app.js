@@ -2,11 +2,13 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import {z} from 'zod';
 import {randomUUID} from 'node:crypto';
 import {hash,otp,opaque,publicUser} from './security.js';
+import {openapi} from './openapi.js';
 
 export function createApp({pool,sendMail,env=process.env}) {
  const app=express();
@@ -21,6 +23,11 @@ export function createApp({pool,sendMail,env=process.env}) {
   const message=error?.status&&(error.status<500||error.status===503)?error.message:'Không thể hoàn tất đăng nhập Google. Vui lòng thử lại.';
   return res.redirect(`childguard://auth?error=${encodeURIComponent(message)}`);
  };
+ app.get('/openapi.json',(req,res)=>res.json(openapi));
+ app.use('/docs',(req,res,next)=>{
+  res.setHeader('Content-Security-Policy',"default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self' data:");
+  next();
+ },swaggerUi.serve,swaggerUi.setup(openapi));
  const auth=run(async(req,res)=>{
   try {const p=jwt.verify(req.headers.authorization?.replace(/^Bearer /,''),env.JWT_SECRET,{algorithms:['HS256'],issuer:'childguard',audience:'childguard-mobile'});const r=await q('SELECT * FROM users WHERE id=$1',[p.sub]); if(!r.rows[0]) fail(401,'Phiên hết hạn');req.user=r.rows[0];}catch {fail(401,'Vui lòng đăng nhập lại');}
  });
