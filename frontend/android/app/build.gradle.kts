@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "vn.edu.hutech.ngokhactrung_0354121528"
+    namespace = "vn.edu.hutech.ngokhactrung_2380602361_nhom4"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -16,7 +16,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "vn.edu.hutech.ngokhactrung_0354121528"
+        applicationId = "vn.edu.hutech.ngokhactrung_2380602361_nhom4"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
