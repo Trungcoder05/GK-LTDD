@@ -10,6 +10,7 @@ import {hash,otp,opaque,publicUser} from './security.js';
 
 export function createApp({pool,sendMail,env=process.env}) {
  const app=express();
+ const publicUrl=env.PUBLIC_URL||env.RENDER_EXTERNAL_URL;
  app.set('trust proxy',1); app.use(helmet());
  app.use(cors({origin:env.ALLOWED_ORIGIN?.split(',') || false}));
  app.use(express.json({limit:'32kb'}));
@@ -75,13 +76,15 @@ export function createApp({pool,sendMail,env=process.env}) {
    if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)fail(503,'Google OAuth chưa được cấu hình');
    const verifierHash=z.string().regex(/^[a-f0-9]{64}$/).parse(req.query.verifierHash);const state=opaque();
    await q("INSERT INTO challenges(id,kind,digest,expires_at,payload) VALUES($1,'oauth-state',$2,now()+interval '5 minutes',$3)",[randomUUID(),hash(state),JSON.stringify({verifierHash})]);
-   const url=new URL('https://accounts.google.com/o/oauth2/v2/auth');url.search=new URLSearchParams({client_id:env.GOOGLE_CLIENT_ID,redirect_uri:env.PUBLIC_URL+'/auth/google/callback',response_type:'code',scope:'openid email profile',state,prompt:'select_account'}).toString();res.redirect(url.href);
+   if(!publicUrl)fail(503,'URL máy chủ chưa được cấu hình');
+   const url=new URL('https://accounts.google.com/o/oauth2/v2/auth');url.search=new URLSearchParams({client_id:env.GOOGLE_CLIENT_ID,redirect_uri:publicUrl+'/auth/google/callback',response_type:'code',scope:'openid email profile',state,prompt:'select_account'}).toString();res.redirect(url.href);
   }catch(error){redirectOAuthError(res,error);}
  }));
  app.get('/auth/google/callback',run(async(req,res)=>{
   try{
    const state=z.string().parse(req.query.state);const ch=(await q("DELETE FROM challenges WHERE digest=$1 AND kind='oauth-state' AND expires_at>now() RETURNING *",[hash(state)])).rows[0];if(!ch)fail(401,'OAuth state không hợp lệ');
-   const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({code:z.string().parse(req.query.code),client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,redirect_uri:env.PUBLIC_URL+'/auth/google/callback',grant_type:'authorization_code'})});const t=await r.json();if(!r.ok)fail(401,'Google từ chối đăng nhập');
+   if(!publicUrl)fail(503,'URL máy chủ chưa được cấu hình');
+   const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',body:new URLSearchParams({code:z.string().parse(req.query.code),client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,redirect_uri:publicUrl+'/auth/google/callback',grant_type:'authorization_code'})});const t=await r.json();if(!r.ok)fail(401,'Google từ chối đăng nhập');
    const info=await fetch('https://openidconnect.googleapis.com/v1/userinfo',{headers:{Authorization:`Bearer ${t.access_token}`}});const g=await info.json();if(!info.ok||!g.email_verified)fail(401,'Email Google chưa xác minh');
    const email=z.string().email().parse(g.email).toLowerCase();let u=(await q('SELECT * FROM users WHERE email=$1',[email])).rows[0];
    if(!u)u=(await q('INSERT INTO users(id,email,username,name,verified) VALUES($1,$2,$3,$4,true) RETURNING *',[randomUUID(),email,'g_'+randomUUID().replaceAll('-',''),g.name||email])).rows[0];
@@ -96,6 +99,11 @@ export function createApp({pool,sendMail,env=process.env}) {
  }));
  app.use(authenticated);
  app.get('/me',(req,res)=>res.json(publicUser(req.user)));
+ app.patch('/me',run(async(req,res)=>{
+  const b=z.object({name:z.string().trim().min(2).max(80)}).parse(req.body);
+  const user=(await q('UPDATE users SET name=$2 WHERE id=$1 RETURNING *',[req.user.id,b.name])).rows[0];
+  res.json(publicUser(user));
+ }));
  app.patch('/me/password',run(async(req,res)=>{
   const b=z.object({
    currentPassword:z.string().max(72).optional(),

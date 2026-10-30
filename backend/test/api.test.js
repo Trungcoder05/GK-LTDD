@@ -25,6 +25,15 @@ test('registration verifies OTP, stores only digest and rejects replay',async()=
  await request(app).get('/me').set(agent(u.token)).expect(200);
  await request(app).get('/me').expect(401);
 });
+test('users can update their display name without changing login identifiers',async()=>{
+ const user=await register();
+ const updated=await request(app).patch('/me').set(agent(user.token)).send({name:'Updated Parent'}).expect(200);
+ assert.equal(updated.body.name,'Updated Parent');
+ assert.equal(updated.body.email,user.user.email);
+ assert.equal(updated.body.username,user.user.username);
+ await request(app).patch('/me').set(agent(user.token)).send({name:' '}).expect(400);
+ assert.equal((await request(app).get('/me').set(agent(user.token)).expect(200)).body.name,'Updated Parent');
+});
 test('Google account can set a password; password accounts must verify the current password',async()=>{
  const {randomUUID}=await import('node:crypto'),verifier='v'.repeat(40),code='g'.repeat(40);
  const google=(await pool.query(
@@ -138,7 +147,7 @@ test('Google OAuth asks Google to show the account chooser',async()=>{
    JWT_SECRET:'test-secret-with-more-than-32-characters',
    GOOGLE_CLIENT_ID:'test-client.apps.googleusercontent.com',
    GOOGLE_CLIENT_SECRET:'test-client-secret',
-   PUBLIC_URL:'https://api.example.com',
+   RENDER_EXTERNAL_URL:'https://api.example.com',
   },
   sendMail:async(email,code)=>mails.push({email,code}),
  });
