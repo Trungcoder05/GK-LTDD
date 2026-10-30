@@ -21,6 +21,8 @@ const agent=token=>({Authorization:'Bearer '+token});
 test('Swagger UI and OpenAPI specification are publicly available',async()=>{
  const spec=await request(app).get('/openapi.json').expect(200);
  assert.equal(spec.body.openapi,'3.0.3');
+ assert.equal(spec.body.info.title,'An Tâm Số API');
+ assert.ok(spec.body.tags.some(tag=>tag.name==='Hệ thống'));
  assert.ok(spec.body.paths['/children/{id}'].delete);
  assert.deepEqual(spec.body.paths['/me'].get.security,[{bearerAuth:[]}]);
  const docs=await request(app).get('/docs/').expect(200);

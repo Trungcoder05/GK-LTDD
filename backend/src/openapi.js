@@ -35,27 +35,27 @@ const errors = {
 export const openapi = {
   openapi: '3.0.3',
   info: {
-    title: 'GK-LTDD API',
+    title: 'An Tâm Số API',
     version: '1.0.0',
     description:
-      'Tài liệu API cho ứng dụng GK-LTDD. Các endpoint yêu cầu đăng nhập cần Bearer token; lấy token sau khi xác minh OTP.',
+      'Tài liệu API cho ứng dụng An Tâm Số. Authorize: đăng nhập để lấy token rồi nhập token trực tiếp, không thêm chữ Bearer. Try it out gọi API thật và có thể thay đổi dữ liệu.',
   },
-  servers: [{url: '/', description: 'Máy chủ hiện tại'}],
+  servers: [{url: '/', description: 'Máy chủ API hiện tại'}],
   tags: [
-    {name: 'System'},
-    {name: 'Authentication'},
-    {name: 'Account'},
-    {name: 'Children'},
-    {name: 'Devices'},
-    {name: 'Agreements'},
-    {name: 'Check-ins'},
-    {name: 'Location'},
-    {name: 'Administration'},
+    {name: 'Hệ thống'},
+    {name: 'Xác thực'},
+    {name: 'Tài khoản'},
+    {name: 'Hồ sơ trẻ'},
+    {name: 'Thiết bị'},
+    {name: 'Thỏa thuận'},
+    {name: 'Check-in'},
+    {name: 'Vị trí'},
+    {name: 'Quản trị'},
   ],
   paths: {
     '/health': {
       get: {
-        tags: ['System'],
+        tags: ['Hệ thống'],
         summary: 'Kiểm tra tình trạng API và cơ sở dữ liệu',
         responses: {
           '200': jsonResponse('API đang hoạt động', 'Health'),
@@ -65,7 +65,7 @@ export const openapi = {
     },
     '/auth/register': {
       post: {
-        tags: ['Authentication'],
+        tags: ['Xác thực'],
         summary: 'Đăng ký tài khoản và gửi mã xác minh email',
         requestBody: body(ref('RegisterRequest')),
         responses: {
@@ -77,7 +77,7 @@ export const openapi = {
     },
     '/auth/login': {
       post: {
-        tags: ['Authentication'],
+        tags: ['Xác thực'],
         summary: 'Đăng nhập bằng mật khẩu và gửi mã OTP',
         requestBody: body(ref('PasswordLoginRequest')),
         responses: {
@@ -88,7 +88,7 @@ export const openapi = {
     },
     '/auth/login/otp': {
       post: {
-        tags: ['Authentication'],
+        tags: ['Xác thực'],
         summary: 'Yêu cầu mã OTP đăng nhập bằng email hoặc tên tài khoản',
         requestBody: body(ref('OtpLoginRequest')),
         responses: {
@@ -99,7 +99,7 @@ export const openapi = {
     },
     '/auth/otp': {
       post: {
-        tags: ['Authentication'],
+        tags: ['Xác thực'],
         summary: 'Xác minh OTP để hoàn tất đăng nhập hoặc đăng ký',
         requestBody: body(ref('VerifyOtpRequest')),
         responses: {
@@ -110,7 +110,7 @@ export const openapi = {
     },
     '/auth/google/start': {
       get: {
-        tags: ['Authentication'],
+        tags: ['Xác thực'],
         summary: 'Bắt đầu đăng nhập Google; trình duyệt sẽ được chuyển hướng',
         parameters: [{
           name: 'verifierHash',
@@ -126,7 +126,7 @@ export const openapi = {
     },
     '/auth/google/callback': {
       get: {
-        tags: ['Authentication'],
+        tags: ['Xác thực'],
         summary: 'Callback OAuth của Google; thường không gọi thủ công',
         parameters: [
           {name: 'code', in: 'query', required: true, schema: {type: 'string'}},
@@ -140,7 +140,7 @@ export const openapi = {
     },
     '/auth/google/exchange': {
       post: {
-        tags: ['Authentication'],
+        tags: ['Xác thực'],
         summary: 'Đổi mã OAuth một lần thành phiên đăng nhập',
         requestBody: body(ref('GoogleExchangeRequest')),
         responses: {
@@ -152,7 +152,7 @@ export const openapi = {
     '/me': {
       get: {
         ...secured,
-        tags: ['Account'],
+        tags: ['Tài khoản'],
         summary: 'Lấy tài khoản hiện tại',
         responses: {
           '200': jsonResponse('Thông tin tài khoản', 'User'),
@@ -161,7 +161,7 @@ export const openapi = {
       },
       patch: {
         ...secured,
-        tags: ['Account'],
+        tags: ['Tài khoản'],
         summary: 'Cập nhật tên hiển thị',
         requestBody: body(ref('UpdateNameRequest')),
         responses: {
@@ -173,7 +173,7 @@ export const openapi = {
     '/me/password': {
       patch: {
         ...secured,
-        tags: ['Account'],
+        tags: ['Tài khoản'],
         summary: 'Tạo hoặc cập nhật mật khẩu',
         requestBody: body(ref('UpdatePasswordRequest')),
         responses: {
@@ -185,7 +185,7 @@ export const openapi = {
     '/children': {
       get: {
         ...secured,
-        tags: ['Children'],
+        tags: ['Hồ sơ trẻ'],
         summary: 'Lấy danh sách hồ sơ trẻ được liên kết với tài khoản',
         responses: {
           '200': {
@@ -197,7 +197,7 @@ export const openapi = {
       },
       post: {
         ...secured,
-        tags: ['Children'],
+        tags: ['Hồ sơ trẻ'],
         summary: 'Tạo hồ sơ trẻ (phụ huynh)',
         requestBody: body(ref('ChildRequest')),
         responses: {
@@ -210,7 +210,7 @@ export const openapi = {
       parameters: [id],
       put: {
         ...secured,
-        tags: ['Children'],
+        tags: ['Hồ sơ trẻ'],
         summary: 'Cập nhật hồ sơ trẻ (phụ huynh sở hữu)',
         requestBody: body(ref('ChildRequest')),
         responses: {
@@ -220,7 +220,7 @@ export const openapi = {
       },
       delete: {
         ...secured,
-        tags: ['Children'],
+        tags: ['Hồ sơ trẻ'],
         summary: 'Xóa hồ sơ trẻ (phụ huynh sở hữu)',
         responses: {'204': response('Đã xóa hồ sơ'), ...errors},
       },
@@ -229,7 +229,7 @@ export const openapi = {
       parameters: [id],
       post: {
         ...secured,
-        tags: ['Children'],
+        tags: ['Hồ sơ trẻ'],
         summary: 'Liên kết tài khoản trẻ đã xác minh vào hồ sơ',
         requestBody: body(ref('LinkChildRequest')),
         responses: {
@@ -242,7 +242,7 @@ export const openapi = {
       parameters: [id],
       get: {
         ...secured,
-        tags: ['Devices'],
+        tags: ['Thiết bị'],
         summary: 'Liệt kê thiết bị của hồ sơ trẻ',
         responses: {
           '200': {
@@ -254,7 +254,7 @@ export const openapi = {
       },
       post: {
         ...secured,
-        tags: ['Devices'],
+        tags: ['Thiết bị'],
         summary: 'Thêm thiết bị vào hồ sơ trẻ (phụ huynh)',
         requestBody: body(ref('DeviceRequest')),
         responses: {
@@ -267,14 +267,14 @@ export const openapi = {
       parameters: [id],
       put: {
         ...secured,
-        tags: ['Devices'],
+        tags: ['Thiết bị'],
         summary: 'Đổi tên thiết bị (phụ huynh)',
         requestBody: body(ref('DeviceRequest')),
         responses: {'200': jsonResponse('Thiết bị đã cập nhật', 'Device'), ...errors},
       },
       delete: {
         ...secured,
-        tags: ['Devices'],
+        tags: ['Thiết bị'],
         summary: 'Xóa thiết bị (phụ huynh)',
         responses: {'204': response('Đã xóa thiết bị'), ...errors},
       },
@@ -283,7 +283,7 @@ export const openapi = {
       parameters: [id],
       get: {
         ...secured,
-        tags: ['Agreements'],
+        tags: ['Thỏa thuận'],
         summary: 'Liệt kê thỏa thuận của hồ sơ trẻ',
         responses: {
           '200': {
@@ -295,7 +295,7 @@ export const openapi = {
       },
       post: {
         ...secured,
-        tags: ['Agreements'],
+        tags: ['Thỏa thuận'],
         summary: 'Tạo thỏa thuận (phụ huynh hoặc trẻ được liên kết)',
         requestBody: body(ref('AgreementRequest')),
         responses: {
@@ -308,7 +308,7 @@ export const openapi = {
       parameters: [id],
       patch: {
         ...secured,
-        tags: ['Agreements'],
+        tags: ['Thỏa thuận'],
         summary: 'Duyệt hoặc từ chối thỏa thuận (phụ huynh)',
         requestBody: body(ref('AgreementStatusRequest')),
         responses: {
@@ -318,7 +318,7 @@ export const openapi = {
       },
       delete: {
         ...secured,
-        tags: ['Agreements'],
+        tags: ['Thỏa thuận'],
         summary: 'Xóa thỏa thuận (phụ huynh)',
         responses: {'204': response('Đã xóa thỏa thuận'), ...errors},
       },
@@ -327,7 +327,7 @@ export const openapi = {
       parameters: [id],
       put: {
         ...secured,
-        tags: ['Check-ins'],
+        tags: ['Check-in'],
         summary: 'Gắn thẻ NFC vào hồ sơ trẻ (phụ huynh)',
         requestBody: body(ref('NfcRequest')),
         responses: {'200': jsonResponse('Đã gắn thẻ NFC', 'Message'), ...errors},
@@ -337,7 +337,7 @@ export const openapi = {
       parameters: [id],
       get: {
         ...secured,
-        tags: ['Check-ins'],
+        tags: ['Check-in'],
         summary: 'Lấy tối đa 50 lượt check-in gần nhất',
         responses: {
           '200': {
@@ -349,7 +349,7 @@ export const openapi = {
       },
       post: {
         ...secured,
-        tags: ['Check-ins'],
+        tags: ['Check-in'],
         summary: 'Ghi nhận check-in bằng thẻ NFC đã gắn',
         requestBody: body(ref('NfcRequest')),
         responses: {
@@ -363,7 +363,7 @@ export const openapi = {
       parameters: [id],
       get: {
         ...secured,
-        tags: ['Location'],
+        tags: ['Vị trí'],
         summary: 'Lấy vị trí được chia sẻ gần nhất',
         responses: {
           '200': jsonResponse('Vị trí gần nhất hoặc null', 'Location'),
@@ -372,14 +372,14 @@ export const openapi = {
       },
       put: {
         ...secured,
-        tags: ['Location'],
+        tags: ['Vị trí'],
         summary: 'Chia sẻ/cập nhật vị trí (tài khoản trẻ đã liên kết)',
         requestBody: body(ref('LocationRequest')),
         responses: {'200': jsonResponse('Vị trí đã cập nhật', 'Location'), ...errors},
       },
       delete: {
         ...secured,
-        tags: ['Location'],
+        tags: ['Vị trí'],
         summary: 'Ngừng chia sẻ và xóa vị trí (tài khoản trẻ đã liên kết)',
         responses: {'204': response('Đã xóa vị trí'), ...errors},
       },
@@ -387,7 +387,7 @@ export const openapi = {
     '/staff/dashboard': {
       get: {
         ...secured,
-        tags: ['Administration'],
+        tags: ['Quản trị'],
         summary: 'Lấy số liệu thống kê tổng hợp (staff/admin)',
         responses: {
           '200': jsonResponse('Số lượng tài khoản, hồ sơ và thiết bị', 'Dashboard'),
@@ -398,7 +398,7 @@ export const openapi = {
     '/admin/users': {
       get: {
         ...secured,
-        tags: ['Administration'],
+        tags: ['Quản trị'],
         summary: 'Liệt kê tối đa 200 tài khoản (admin)',
         responses: {
           '200': {
@@ -413,7 +413,7 @@ export const openapi = {
       parameters: [id],
       patch: {
         ...secured,
-        tags: ['Administration'],
+        tags: ['Quản trị'],
         summary: 'Cấp quyền parent, child hoặc staff (admin)',
         requestBody: body(ref('RoleRequest')),
         responses: {
